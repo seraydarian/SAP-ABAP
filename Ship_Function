@@ -1,0 +1,90 @@
+FUNCTION ZAO_ORDER_FM.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(ORDER_ID) TYPE  ZAO_ORDERS2-ORDERID OPTIONAL
+*"     REFERENCE(USERNAME) TYPE  ZAO_ORDERS2-USERNAME OPTIONAL
+*"  TABLES
+*"      IT_SHIP STRUCTURE  ZLG_SHIP
+*"  EXCEPTIONS
+*"      USERNAME_NOT_FOUND_IN_ORDERS
+*"      ORDERID_NOT_FOUND_IN_SHIP
+*"      SHIPMENT_IS_EMPTY
+*"      NO_CORRESPONDING_ORDERID
+*"      NO_MATCH_FOUND_IN_ORDERS
+*"----------------------------------------------------------------------
+DATA: IT_ORDERS TYPE STANDARD TABLE OF ZAO_ORDERS2.
+
+
+*username - no, orderid - no
+  if username is initial and order_id is initial.
+    select *
+    from zao_ship
+    into CORRESPONDING FIELDS OF table it_ship.
+
+    IF SY-SUBRC <> 0.
+      RAISE SHIPMENT_IS_EMPTY.
+    ENDIF.
+*username - no, orderid - yes
+  elseif username is initial and order_id is not initial.
+    select *
+    from zao_ship
+    into CORRESPONDING FIELDS OF table it_ship
+    where orderid = order_id.
+
+    IF SY-SUBRC <> 0.
+      RAISE ORDERID_NOT_FOUND_IN_SHIP.
+    ENDIF.
+*username - yes, orderid - no
+  elseif username is not initial and order_id is initial.
+
+    select *
+      from zao_orders2
+      into CORRESPONDING FIELDS OF TABLE it_orders
+      where username = username.
+
+
+    IF SY-SUBRC <> 0.
+      RAISE USERNAME_NOT_FOUND_IN_ORDERS.
+      EXIT.
+    ENDIF.
+
+    select *
+      from zao_ship
+      into CORRESPONDING FIELDS OF TABLE IT_ship
+      FOR ALL ENTRIES IN it_orders
+      where orderid = it_orders-orderid.
+
+    IF SY-SUBRC <> 0.
+     RAISE NO_CORRESPONDING_ORDERID.
+    ENDIF.
+
+*username - yes, orderid - yes
+  elseif username is not initial and order_id is not initial.
+    select *
+      from zao_orders2
+      into CORRESPONDING FIELDS OF TABLE it_orders
+      where username = username
+        and orderid = order_id.
+
+    IF SY-SUBRC <> 0.
+      RAISE NO_MATCH_FOUND_IN_ORDERS.
+      EXIT.
+    ENDIF.
+
+    select *
+      from zao_ship
+      into CORRESPONDING FIELDS OF TABLE it_ship
+      FOR ALL ENTRIES IN it_orders
+      where orderid = it_orders-orderid.
+
+    IF SY-SUBRC <> 0.
+     RAISE NO_CORRESPONDING_ORDERID.
+    ENDIF.
+
+  endif.
+
+
+
+
+ENDFUNCTION.
