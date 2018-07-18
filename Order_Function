@@ -1,0 +1,426 @@
+*&---------------------------------------------------------------------*
+*& Report  ZVDELAN3_JASON_V2
+*& Jason Seraydarian March 7th, 2012
+*& QM Return report Batch Trackability Capability For Perscription Products
+*& requested By Lisa Mathus,  Fuctional Specification issue date 2/2/2012.
+*& COP due to their perscription products  all products must be reutrned to the Manufacturing plant(USC1-Gillis Location
+*& for Disposition and overall disposal process.  The Batch is required to be tracked so APL (USC2) cannot accept returns since
+*& that location is not batch managed
+*& All other North American Plants return do to DC's and Managed diffently
+*&
+*& started with ZSD0068 and created a new program with ALV display
+*& old program was Name: ZVDELAN3 - Tcode ZSD0068
+*&
+*& All returns will be displayed for selected criteria.  All batch managed items will showthe specificaic batch
+*& ITB and related products that are not batch managed will show on th report without the batch column populated
+*& Disposition is determined by movement type performed.
+*& Disposition date is determinied by the financial posting date.
+*& output to ALV
+*& Movement type 555
+*& try wild card *
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  ZVDELAN3_JASON_V2.
+
+******************************************************************
+*                       T A B L E S                              *
+******************************************************************
+*
+TABLES:  LIKP, LIPS, VBAP, MAKT, MKPF, MSEG, T157E.
+** LIKP = SD Document: delievery header,  fields needed LIKP-WADAT_IST  date of the good deleiveried
+** LIPS = SD Document: Delievry: Item Data,  Fields needed LIPS-MATNR = Material number
+** LIPS = LIPS_CHARG Batch Number  We can possiably uses LIPS-WERKS  Plant
+** VBAP = Sales Document:Item Data  VBAP-WERKS = Plant
+**         SKU  = MAKT-MATNR  material number
+**         SKU description = MAKT-MAKTX   description short
+**        Quanity Returned
+**        Reason Code  = MSEG-GRUND
+**        Reason Description = T157E-GRTXT
+**        Date of Dispostion = MKPF-BUDAT
+**        Disposition  = MSEG-BWART
+** T157E = reason for Movement, GRTXT = reason for Goods Moved,  T157E-MANDT is client
+** MSEG = document Segment: Material,  MSEG-MANDT, client MSEG-MATNR
+** MKPF = Material Document,  MKPF-MANDT client,
+
+
+TYPE-POOLS: SlIS.
+
+******************************************************************
+*              PARAMETERS / SCREEN SELECT OPTIONS                *
+******************************************************************
+**Selection screen
+SELECTION-SCREEN BEGIN of BLOCK B WITH FRAME TITLE TEXT-002.
+**Material Number (delievery table item data
+**  SELECTION_OPTIONS:
+ SELECT-OPTIONS:  S_MATNR FOR LIPS-MATNR.
+**Plant Number
+ SELECT-OPTIONS:  S_PLANT FOR VBAP-WERKS.
+** Batch Field
+ SELECT-OPTIONS:  S_CHARG FOR LIPS-CHARG.
+** Acutal GI date // Date Shipped
+ SELECT-OPTIONS:  S_WADAT FOR LIKP-WADAT_IST.
+**
+   SELECTION-SCREEN END OF BLOCK B.
+
+
+DATA: BEGIN OF w_HOLD_tab OCCURS 200,
+** Material Number
+   MATNR LIKE LIPS-MATNR,
+** Batch
+   BATC LIKE S_CHARG,
+
+** Material Description
+   MATDES LIKE MAKT-MAKTX,
+** Quanity Returned //  LIPS is total deleveried
+   Total LIKE LIPS-LFIMG,
+**** Quanity Returned //  LIPS is total deleveried
+**   Total LIKE LIPS-LFIMG,
+**Reason Code
+   REAS LIKE MSEG-GRUND,
+**Dispostion
+   DISP LIKE MSEG-BWART,
+** Reason desription
+   REDE LIKE T157E-GRTXT,
+
+  END OF w_HOLD_tab.
+DATA:i_HOLD_tab LIKE STANDARD TABLE OF w_HOLD_tab.
+APPEND w_HOLD_tab TO i_HOLD_tab.
+
+
+ DATA: BEGIN OF w_LIP_tab OCCURS 200,
+** Material Number
+   MATNR LIKE LIPS-MATNR,
+**Batch
+   CHARG LIKE LIPS-CHARG,
+** PLANT
+   PLANT LIKE LIPS-WERKS,
+** Movement type,  this IS THE KEY
+   Total LIKE LIPS-BWART,
+
+    END OF w_LIP_tab.
+DATA: itab LIKE STANDARD TABLE OF w_LIP_tab.
+**
+SELECT MATNR FROM LIPS INTO CORRESPONDING FIELDS OF TABLE itab
+WHERE BWART = '555'.
+**MATNR IN S_MATNR AND CHARG IN s_CHARG.
+APPEND w_LIP_tab TO itab.
+APPEND w_LIP_tab TO w_HOLD_tab.
+
+****
+**    DATA: BEGIN OF w_VBAP_tab OCCURS 200,
+**** Plant
+****   PLANT LIKE VBAP-WERKS,
+**** maertial number
+**   MATFL LIKE VBAP-MATNR,
+**
+**      END OF w_VBAP_tab.
+**      DATA: i_VBAP_tab LIKE STANDARD TABLE OF w_VBAP_tab.
+**SELECT WERKS FROM VBAP INTO CORRESPONDING FIELDS OF TABLE i_VBAP_tab.
+****WHERE
+**APPEND w_VBAP_tab TO w_HOLD_tab.
+
+
+**
+DATA: BEGIN OF w_MAKT_tab OCCURS 200,
+** Material Description
+   MATDES LIKE MAKT-MAKTX,
+
+END OF w_MAKT_tab.
+DATA: itab2 LIKE STANDARD TABLE OF w_MAKT_tab.
+
+SELECT MAKTX FROM MAKT INTO CORRESPONDING FIELDS OF TABLE itab2.
+** WHERE MAKT-MATNR =
+APPEND LINES OF itab2 TO w_HOLD_tab.
+APPEND w_MAKT_tab To w_HOLD_tab.
+
+
+
+**
+DATA: BEGIN OF w_MSEG_tab OCCURS 200,
+**Reason Code
+   REAS LIKE MSEG-GRUND,
+**Dispostion
+   DISP LIKE MSEG-BWART,
+**Material number
+  Matnr LIKE MSEG-MATNR,
+
+  END OF w_MSEG_tab.
+DATA: itab3 LIKE STANDARD TABLE OF w_MSEG_tab.
+SELECT GRUND BWART MATNR FROM MSEG INTO CORRESPONDING FIELDS OF TABLE itab3
+  WHERE BWART = '555'.
+  APPEND LINES OF itab3 TO w_HOLD_tab.
+
+
+**
+  DATA: BEGIN OF w_MKPF_tab OCCURS 200,
+**date of dispostion
+   DADIS LIKE MKPF-BUDAT,
+
+    END OF w_MKPF_tab.
+    DATA: i_MKPF_tab LIKE STANDARD TABLE OF w_MKPF_tab.
+    SELECT BUDAT FROM MKPF INTO CORRESPONDING FIELDS OF TABLE i_MKPF_tab.
+** WHERE MATNR = MAKPF-MATNR
+   APPEND w_MKPF_tab TO w_HOLD_tab.
+
+**
+  DATA: BEGIN OF w_T_tab OCCURS 200,
+** Reason desription
+   MOVTY LIKE T157E-BWART,
+** Reason desription
+   REDE LIKE T157E-GRTXT,
+    END OF w_T_tab.
+  DATA: itab4 LIKE STANDARD TABLE OF w_T_tab.
+
+  SELECT BWART GRTXT FROM T157E INTO CORRESPONDING FIELDS OF TABLE itab4
+    WHERE BWART = '555'.
+
+APPEND w_T_tab TO w_HOLD_tab.
+
+**
+DATA: BEGIN OF w_LIKP_tab OCCURS 200,
+**Date
+   WADAT LIKE LIKP-WADAT_IST,
+  END OF w_LIKP_tab.
+DATA: i_LIKP_tab LIKE STANDARD TABLE OF w_LIKP_tab.
+
+SELECT * FROM LIKP WHERE VBELN = LIPS-VBELN
+   AND  WADAT_IST IN S_WADAT.
+  ENDSELECT.
+
+**SELECT * FROM VBFA
+**  WHERE VBELN = LIPS-VBELN
+**  AND POSNN = LIPS-POSNR.
+**  IF SY-SUBRC = 0.
+**  ENDIF.
+**  ENDSELECT.
+
+**LOOP AT itab INTO w_LIP_tab.
+**  READ TABLE itab3 INTO w_MSEG_tab WITH KEY MATNR = w_LIP_tab-MATNR.
+**  IF SY-SUBRC EQ 0.
+**    itab-MATNR = w_MSEG_tab-MATNR.
+**  ENDIF.
+**
+**ENDLOOP.
+
+*this data for the fieldcatlog for the alv display
+DATA: FIELDCATALOG TYPE SLis_T_FIELDCAT_ALV WITH HEADER LINE,
+*wa_FIELDCAT TYPE slis_FIELDCAT_ALV,
+      GD_LAYOUT    TYPE SLIS_LAYOUT_ALV,
+      GD_REPID     LIKE SY-REPID,
+      G_SAVE TYPE C VALUE 'X',
+      G_VARIANT TYPE DISVARIANT,
+      GX_VARIANT TYPE DISVARIANT.
+
+PERFORM BUILD_FIELDCATALOG.
+PERFORM DISPLAY_ALV_REPORT.
+
+FORM BUILD_FIELDCATALOG.
+  FIELDCATALOG-FIELDNAME   = 'MATNR'.
+  FIELDCATALOG-SELTEXT_M   = 'Material #'.
+  FIELDCATALOG-COL_POS     = 0.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR  FIELDCATALOG.
+
+  FIELDCATALOG-FIELDNAME   = 'MATDES'.
+  FIELDCATALOG-SELTEXT_M   = 'Material Description'.
+  FIELDCATALOG-COL_POS     = 1.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+FIELDCATALOG-FIELDNAME   = 'BATC'.
+  FIELDCATALOG-SELTEXT_M   = 'Batch'.
+  FIELDCATALOG-COL_POS     = 2.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+FIELDCATALOG-FIELDNAME   = 'TOTAL'.
+  FIELDCATALOG-SELTEXT_M   = 'Quantity Returned'.
+  FIELDCATALOG-COL_POS     = 3.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+  FIELDCATALOG-FIELDNAME   = 'REAS'.
+  FIELDCATALOG-SELTEXT_M   = 'Reason Code'.
+  FIELDCATALOG-COL_POS     = 4.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR  FIELDCATALOG.
+
+  FIELDCATALOG-FIELDNAME   = 'REDE'.
+  FIELDCATALOG-SELTEXT_M   = 'Reason Description'.
+  FIELDCATALOG-COL_POS     = 5.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+FIELDCATALOG-FIELDNAME   = 'REDE'.
+  FIELDCATALOG-SELTEXT_M   = 'Date of Disposition'.
+  FIELDCATALOG-COL_POS     = 6.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+FIELDCATALOG-FIELDNAME   = 'DADIS'.
+  FIELDCATALOG-SELTEXT_M   = 'Disposition'.
+  FIELDCATALOG-COL_POS     = 7.
+  APPEND FIELDCATALOG TO FIELDCATALOG.
+  CLEAR FIELDCATALOG.
+
+ENDFORM.
+
+FORM DISPLAY_ALV_REPORT.
+  GD_REPID = SY-REPID.
+**append wa_fieldcat to it_fieldcatlog.
+CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+ EXPORTING
+*   I_INTERFACE_CHECK                 = ' '
+*   I_BYPASSING_BUFFER                = ' '
+*   I_BUFFER_ACTIVE                   = ' '
+   I_CALLBACK_PROGRAM                =  GD_REPID
+*   I_CALLBACK_PF_STATUS_SET          = ' '
+*   I_CALLBACK_USER_COMMAND           = ' '
+   I_CALLBACK_TOP_OF_PAGE            = 'TOP-OF-PAGE'
+*   I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*   I_CALLBACK_HTML_END_OF_LIST       = ' '
+*   I_STRUCTURE_NAME                  =
+*   I_BACKGROUND_ID                   = ' '
+*   I_GRID_TITLE                      =
+*   I_GRID_SETTINGS                   =
+   IS_LAYOUT                         = GD_Layout
+   IT_FIELDCAT                       = FIELDCATALOG[]
+*   IT_EXCLUDING                      =
+*   IT_SPECIAL_GROUPS                 =
+*   IT_SORT                           =
+*   IT_FILTER                         =
+*   IS_SEL_HIDE                       =
+*   I_DEFAULT                         = 'X'
+   I_SAVE                            = 'X'
+   IS_VARIANT                        = G_VARIANT
+*   IT_EVENTS                         =
+*   IT_EVENT_EXIT                     =
+*   IS_PRINT                          =
+*   IS_REPREP_ID                      =
+*   I_SCREEN_START_COLUMN             = 0
+*   I_SCREEN_START_LINE               = 0
+*   I_SCREEN_END_COLUMN               = 0
+*   I_SCREEN_END_LINE                 = 0
+*   I_HTML_HEIGHT_TOP                 = 0
+*   I_HTML_HEIGHT_END                 = 0
+*   IT_ALV_GRAPHICS                   =
+*   IT_HYPERLINK                      =
+*   IT_ADD_FIELDCAT                   =
+*   IT_EXCEPT_QINFO                   =
+*   IR_SALV_FULLSCREEN_ADAPTER        =
+* IMPORTING
+*   E_EXIT_CAUSED_BY_CALLER           =
+*   ES_EXIT_CAUSED_BY_USER            =
+ TABLES
+    T_OUTTAB                          = i_HOLD_tab.
+* EXCEPTIONS
+*   PROGRAM_ERROR                     = 1
+*   OTHERS                            = 2
+.
+*IF SY-SUBRC <> 0.
+** MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+**         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+*ENDIF.
+
+ENDFORM.
+
+
+FORM TOP-OF-PAGE.
+
+*ALV Header declarations
+data: t_header type slis_t_listheader,
+      wa_header type slis_listheader,
+      t_line like wa_header-info,
+      ld_lines type i,
+      ld_linesc(10) type c.
+
+* Title
+  wa_header-typ  = 'H'.
+  wa_header-info = 'Colgate-Palmolive Company '.
+  append wa_header to t_header.
+  clear wa_header.
+
+* Description
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Description:'.
+  CONCATENATE  'QM Returns Report Batch Trackability' '' INTO wa_header-info.
+  append wa_header to t_header.
+  clear: wa_header.
+
+* Date
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Date: '.
+  CONCATENATE  sy-datum+6(2) '.'
+               sy-datum+4(2) '.'
+               sy-datum(4) INTO wa_header-info.   "todays date
+  append wa_header to t_header.
+  clear: wa_header.
+
+* Report ID
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Report ID:'.
+  CONCATENATE  sy-repid '' INTO wa_header-info.   "Report Id.
+  append wa_header to t_header.
+  clear: wa_header.
+
+* Material Number
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Material Number:'.
+  CONCATENATE  'LIPS-MATNR' '' INTO wa_header-info.
+  append wa_header to t_header.
+  clear: wa_header.
+
+* Plant Number
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Plant Number:'.
+  CONCATENATE  'VBAP-WERKS' '' INTO wa_header-info.
+  append wa_header to t_header.
+  clear: wa_header.
+
+
+* Batch Number
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Batch Number:'.
+  CONCATENATE  'LIPS-CHARG' '' INTO wa_header-info.
+  append wa_header to t_header.
+  clear: wa_header.
+
+* Date Shipped
+  wa_header-typ  = 'S'.
+  wa_header-key = 'Date Shipped:'.
+  CONCATENATE  'LIKP-WADAR_IST' '' INTO wa_header-info.
+  append wa_header to t_header.
+  clear: wa_header.
+
+* User ID
+  wa_header-typ  = 'S'.
+  wa_header-key = 'User ID:'.
+  CONCATENATE  sy-uname '' INTO wa_header-info.   "Report Id.
+  append wa_header to t_header.
+  clear: wa_header.
+
+*** Variant Name
+**  wa_header-typ  = 'S'.
+**  wa_header-key = 'Variant: '.
+**  wa_header-info = sy-slset.
+**  append wa_header to t_header.
+**  clear: wa_header, t_line.
+**
+*** Controlling Area.
+**  wa_header-typ  = 'S'.
+**  wa_header-key = 'Controlling Area: '.
+**  wa_header-info = 'hello'.
+**  append wa_header to t_header.
+**  clear: wa_header, t_line.
+
+
+  call function 'REUSE_ALV_COMMENTARY_WRITE'
+       exporting
+            it_list_commentary = t_header.
+*            i_logo             = 'Z_LOGO'.
+
+ENDFORM.
